@@ -1,0 +1,7 @@
+curl -X PUT -H "Content-Type: image/jpeg" --data-binary "@image.jpg" http://localhost:3000/200
+
+curl -X GET http://localhost:3000/200 --output downloaded_200.jpg
+
+curl -X DELETE http://localhost:3000/200
+
+curl -X GET http://localhost:3000/404
