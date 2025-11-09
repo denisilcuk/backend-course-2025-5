@@ -1,7 +1,7 @@
-// index.js
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const superagent = require('superagent');
 const { program } = require('commander');
 
 // === 1. Командні параметри ===
@@ -25,32 +25,43 @@ const server = http.createServer(async (req, res) => {
   const urlPath = req.url; // наприклад "/200"
   const method = req.method;
 
-  // Ігноруємо запити, що не відповідають формату "/<код>"
   if (!/^\/\d+$/.test(urlPath)) {
     res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('❌ Некоректний шлях. Використовуйте формат /<HTTP-код>');
     return;
   }
 
-  const code = urlPath.slice(1); // "200"
+  const code = urlPath.slice(1);
   const filePath = path.join(cacheDir, `${code}.jpg`);
 
   try {
     switch (method) {
-      // ===== GET =====
+      // === GET ===
       case 'GET': {
         try {
+          // спроба прочитати з кешу
           const data = await fs.promises.readFile(filePath);
           res.writeHead(200, { 'Content-Type': 'image/jpeg' });
           res.end(data);
         } catch {
-          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-          res.end(`❌ Файл для коду ${code} не знайдено`);
+          console.log(`⚠️ Файл ${filePath} відсутній у кеші, отримуємо з http.cat...`);
+          try {
+            const response = await superagent.get(`https://http.cat/${code}`);
+            const imgData = response.body;
+
+            // якщо отримали картинку, кешуємо її
+            await fs.promises.writeFile(filePath, imgData);
+            res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+            res.end(imgData);
+          } catch {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(`❌ Картинку для коду ${code} не знайдено на сервері http.cat`);
+          }
         }
         break;
       }
 
-      // ===== PUT =====
+      // === PUT ===
       case 'PUT': {
         let body = [];
         req.on('data', chunk => body.push(chunk));
@@ -63,7 +74,7 @@ const server = http.createServer(async (req, res) => {
         break;
       }
 
-      // ===== DELETE =====
+      // === DELETE ===
       case 'DELETE': {
         try {
           await fs.promises.unlink(filePath);
@@ -76,7 +87,7 @@ const server = http.createServer(async (req, res) => {
         break;
       }
 
-      // ===== Інші методи =====
+      // === Інші методи ===
       default:
         res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('❌ Метод не дозволений');
